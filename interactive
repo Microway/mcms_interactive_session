@@ -3,6 +3,8 @@
 # Copyright (C) 2013 Alan Orth
 # https://github.com/alanorth/hpc_infrastructure_scripts/
 #
+# Modified by Eliot Eshelman to support generic resources (accelerators)
+#
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
@@ -25,25 +27,42 @@
 
 # defaults
 DEF_NUM_CPUS=1
-DEF_PARTITION=batch
+DEF_PARTITION=interactive
 DEF_JOB_NAME=interactive
 
 ######
  
 function help() {
-    echo -e "Usage: `basename $0` [-c] [-p] \n"
-    echo "Optional arguments:"
+    echo
+    echo -e "Usage: `basename $0` [-c] [-f] [-g] [-p] [-J]"
+    echo
+    echo -e "Optional arguments:"
     echo -e "\t -c: number of CPU cores to request (default: $DEF_NUM_CPUS)"
-    echo -e "\t -p: partition to run job in (default: $DEF_PARTITION)"
-    echo -e "\t -J: job name"
 
-    echo -e "\nWritten by: Alan Orth <a.orth@cgiar.org>"
+    echo
+    echo -e "\t -g: type and number of generic resources - available options:"
+    # List available generic resources in SLURM
+    srun --gres=help | grep -v "Valid gres options are:" | sed 's/^/\t\t/'
+
+    echo
+    echo -e "\t -f: desired node features - available options:"
+    # List available node features in SLURM
+    sinfo --format="%f" | grep -v "FEATURES" | sed 's/^/\t\t/'
+
+    echo
+    echo -e "\t -p: partition to run job in (default: $DEF_PARTITION)"
+    echo -e "\t -J: job name (default: $DEF_JOB_NAME)"
+
+    echo
+    echo -e "Written by: Alan Orth <a.orth@cgiar.org>"
+    echo -e "Microway modifications by: Eliot Eshelman <eliot@microway.com>"
+    echo
 
     exit 0
 }
 
 function parse_options() {
-    while getopts ":c:p:J:" opt; do
+    while getopts ":c:g:f:p:J:" opt; do
         case $opt in
             c)
                 # make sure -c is passed a valid integer
@@ -52,6 +71,12 @@ function parse_options() {
                 fi
 
                 NUM_CPUS=$OPTARG
+                ;;
+            g)
+                GRES=$OPTARG
+                ;;
+            f)
+                FEATURES=$OPTARG
                 ;;
             p)
                 PARTITION=$OPTARG
@@ -67,13 +92,21 @@ function parse_options() {
 }
 
 function envsetup() {
-    SALLOC_BIN=/usr/bin/salloc
-
     # default is to request 1 CPU, unless more are requested
     if [[ $NUM_CPUS -gt $DEF_NUM_CPUS ]]; then
         SALLOC_OPTS="-n $NUM_CPUS"
     else
         SALLOC_OPTS="-n $DEF_NUM_CPUS"
+    fi
+
+    # check for generic resource requirements (if any)
+    if [[ -n "$GRES" ]]; then
+        SALLOC_OPTS="$SALLOC_OPTS --gres=$GRES"
+    fi
+
+    # check for required features (if any)
+    if [[ -n "$FEATURES" ]]; then
+        SALLOC_OPTS="$SALLOC_OPTS --constraint=$FEATURES"
     fi
 
     # check for a job name
@@ -97,8 +130,6 @@ function envsetup() {
         SRUN_OPTS="--pty"
     fi
 
-    SRUN_BIN=/usr/bin/srun
-
     INTERACTIVE_SHELL=/bin/bash
     SHELL_OPTS="-i -l" # not sure if needed
 }
@@ -109,4 +140,4 @@ parse_options "$@"
 # setup the defaults
 envsetup
 
-$SALLOC_BIN $SALLOC_OPTS $SRUN_BIN $SRUN_OPTS $INTERACTIVE_SHELL
+salloc $SALLOC_OPTS srun $SRUN_OPTS $INTERACTIVE_SHELL
