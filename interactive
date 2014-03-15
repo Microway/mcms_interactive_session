@@ -31,10 +31,10 @@ DEF_PARTITION=interactive
 DEF_JOB_NAME=interactive
 
 ######
- 
+
 function help() {
     echo
-    echo -e "Usage: `basename $0` [-c] [-f] [-g] [-p] [-J]"
+    echo -e "Usage: `basename $0` [-c] [-f] [-g] [-p] [-J] [-s]"
     echo
     echo -e "Optional arguments:"
     echo -e "\t -c: number of CPU cores to request (default: $DEF_NUM_CPUS)"
@@ -52,6 +52,7 @@ function help() {
     echo
     echo -e "\t -p: partition to run job in (default: $DEF_PARTITION)"
     echo -e "\t -J: job name (default: $DEF_JOB_NAME)"
+    echo -e "\t -s: share node with other users (default: yes)"
 
     echo
     echo -e "Written by: Alan Orth <a.orth@cgiar.org>"
@@ -62,7 +63,7 @@ function help() {
 }
 
 function parse_options() {
-    while getopts ":c:g:f:p:J:" opt; do
+    while getopts ":c:g:f:p:J:s:" opt; do
         case $opt in
             c)
                 # make sure -c is passed a valid integer
@@ -83,6 +84,17 @@ function parse_options() {
                 ;;
             J)
                 JOB_NAME=$OPTARG
+                ;;
+            s)
+                # make sure -s is passed a valid boolean
+                OPTARG=${OPTARG:0:1}
+                if [[ "$OPTARG" == "0" ]] || [[ "${OPTARG^^}" == "N" ]]; then
+                    SHARE_NODE=0
+                elif [[ "$OPTARG" == "1" ]] || [[ "${OPTARG^^}" == "Y" ]]; then
+                    SHARE_NODE=1
+                else
+                    help
+                fi
                 ;;
             \?|:)
                 help
@@ -109,6 +121,13 @@ function envsetup() {
         SALLOC_OPTS="$SALLOC_OPTS --constraint=$FEATURES"
     fi
 
+    # see if the user specified a partition
+    if [[ -n "$PARTITION" ]]; then
+        SALLOC_OPTS="$SALLOC_OPTS -p $PARTITION"
+    else
+        SALLOC_OPTS="$SALLOC_OPTS -p $DEF_PARTITION"
+    fi
+
     # check for a job name
     if [[ -n "$JOB_NAME" ]]; then
         SALLOC_OPTS="$SALLOC_OPTS -J $JOB_NAME"
@@ -116,11 +135,11 @@ function envsetup() {
         SALLOC_OPTS="$SALLOC_OPTS -J $DEF_JOB_NAME"
     fi
 
-    # see if the user specified a partition
-    if [[ -n "$PARTITION" ]]; then
-        SALLOC_OPTS="$SALLOC_OPTS -p $PARTITION"
+    # set the job to shared or exclusive mode
+    if [[ -n "$SHARE_NODE" ]] && [[ "$SHARE_NODE" -eq 0 ]]; then
+        SALLOC_OPTS="$SALLOC_OPTS --exclusive"
     else
-        SALLOC_OPTS="$SALLOC_OPTS -p $DEF_PARTITION"
+        SALLOC_OPTS="$SALLOC_OPTS --share"
     fi
 
     # check if we want X11
