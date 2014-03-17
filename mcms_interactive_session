@@ -45,9 +45,10 @@ function help() {
     srun --gres=help | grep -v "Valid gres options are:" | sed 's/^/\t\t/'
 
     echo
-    echo -e "\t -f: desired node features - available options:"
+    echo -e "\t -f: desired node features (combine features by using the | or & operators)"
+    echo -e "\t     Available options:"
     # List available node features in SLURM
-    sinfo --format="%f" | grep -v "FEATURES" | sed 's/^/\t\t/'
+    sinfo --format="%f" | awk '!/FEATURES/ {gsub(",", "\n\t\t "); print "\t\t",$0}' | sort -u
 
     echo
     echo -e "\t -p: partition to run job in (default: $DEF_PARTITION)"
