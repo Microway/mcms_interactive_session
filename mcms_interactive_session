@@ -34,15 +34,16 @@ DEF_JOB_NAME=interactive
 
 function help() {
     echo
-    echo -e "Usage: `basename $0` [-c] [-f] [-g] [-p] [-J] [-s]"
+    echo -e "Usage: `basename $0` [-c] [-m] [-f] [-g] [-p] [-J] [-s] [-t]"
     echo
     echo -e "Optional arguments:"
     echo -e "\t -c: number of CPU cores to request (default: $DEF_NUM_CPUS)"
+    echo -e "\t -m: number of megabytes of memory to request"
 
     echo
     echo -e "\t -g: type and number of generic resources - available options:"
     # List available generic resources in SLURM
-    srun --gres=help | grep -v "Valid gres options are:" | sed 's/^/\t\t/'
+    srun --gres=help | awk '!/Valid gres/ {print "\t\t",$0}' | sort -u
 
     echo
     echo -e "\t -f: desired node features (combine features by using the | or & operators)"
@@ -54,6 +55,7 @@ function help() {
     echo -e "\t -p: partition to run job in (default: $DEF_PARTITION)"
     echo -e "\t -J: job name (default: $DEF_JOB_NAME)"
     echo -e "\t -s: share node with other users (default: yes)"
+    echo -e "\t -t: job length (use SLURM time formats)"
 
     echo
     echo -e "Written by: Alan Orth <a.orth@cgiar.org>"
@@ -64,7 +66,7 @@ function help() {
 }
 
 function parse_options() {
-    while getopts ":c:g:f:p:J:s:" opt; do
+    while getopts ":c:m:g:f:p:J:s:t:" opt; do
         case $opt in
             c)
                 # make sure -c is passed a valid integer
@@ -73,6 +75,14 @@ function parse_options() {
                 fi
 
                 NUM_CPUS=$OPTARG
+                ;;
+            m)
+                # make sure -m is passed a valid integer
+                if ! [[ "$OPTARG" =~ ^[0-9]+$ ]]; then
+                    help
+                fi
+
+                NUM_MEMORY=$OPTARG
                 ;;
             g)
                 GRES=$OPTARG
@@ -97,6 +107,9 @@ function parse_options() {
                     help
                 fi
                 ;;
+            t)
+                JOB_TIME=$OPTARG
+                ;;
             \?|:)
                 help
                 ;;
@@ -110,6 +123,11 @@ function envsetup() {
         SALLOC_OPTS="-n $NUM_CPUS"
     else
         SALLOC_OPTS="-n $DEF_NUM_CPUS"
+    fi
+
+    # check for memory quantity required (if any)
+    if [[ -n "$NUM_MEMORY" ]]; then
+        SALLOC_OPTS="$SALLOC_OPTS --mem=$NUM_MEMORY"
     fi
 
     # check for generic resource requirements (if any)
@@ -141,6 +159,11 @@ function envsetup() {
         SALLOC_OPTS="$SALLOC_OPTS --exclusive"
     else
         SALLOC_OPTS="$SALLOC_OPTS --share"
+    fi
+
+    # check for job's time requirements
+    if [[ -n "$JOB_TIME" ]]; then
+        SALLOC_OPTS="$SALLOC_OPTS --time=$JOB_TIME"
     fi
 
     # check if we want X11
