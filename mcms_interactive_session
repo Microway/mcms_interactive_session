@@ -34,6 +34,8 @@ DEF_JOB_NAME=interactive
 
 function help() {
     echo
+    echo -e "Obtain an interactive shell on a compute node (via SLURM)."
+    echo
     echo -e "Usage: `basename $0` [-c] [-m] [-f] [-g] [-p] [-J] [-s] [-t]"
     echo
     echo -e "Optional arguments:"
