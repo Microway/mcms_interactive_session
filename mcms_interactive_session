@@ -185,4 +185,15 @@ parse_options "$@"
 # setup the defaults
 envsetup
 
+
+# We may have a pause here if SLURM is getting nodes ready (either by powering
+# up nodes that are powered off and/or running long health checks).
+echo
+echo "Obtaining your interactive shell session..."
+echo
+echo "Please be patient - if the compute nodes are in power-saving mode,"
+echo "it may take 2-3 minutes to start your session..."
+echo
+
 salloc $SALLOC_OPTS srun $SRUN_OPTS $INTERACTIVE_SHELL
+
