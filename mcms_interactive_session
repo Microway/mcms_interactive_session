@@ -28,7 +28,7 @@
 # defaults
 DEF_NUM_CPUS=1
 DEF_PARTITION=interactive
-DEF_JOB_NAME=interactive
+DEF_JOB_NAME=${USER}-interactive
 
 ######
 
