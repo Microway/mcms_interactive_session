@@ -3,7 +3,8 @@
 # Copyright (C) 2013 Alan Orth
 # https://github.com/alanorth/hpc_infrastructure_scripts/
 #
-# Modified by Eliot Eshelman to support generic resources (accelerators)
+# Copyright (C) 2014 Microway, Inc. All rights reserved.
+# Modified to support generic resources (accelerators) and other SLURM flags.
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -36,7 +37,7 @@ function help() {
     echo
     echo -e "Obtain an interactive shell on a compute node (via SLURM)."
     echo
-    echo -e "Usage: `basename $0` [-c] [-m] [-f] [-g] [-p] [-J] [-s] [-t]"
+    echo -e "Usage: `basename $0` [-c] [-m] [-f] [-g] [-p] [-J] [-r] [-s] [-t]"
     echo
     echo -e "Optional arguments:"
     echo -e "\t -c: number of CPU cores to request (default: $DEF_NUM_CPUS)"
@@ -56,6 +57,7 @@ function help() {
     echo
     echo -e "\t -p: partition to run job in (default: $DEF_PARTITION)"
     echo -e "\t -J: job name (default: $DEF_JOB_NAME)"
+    echo -e "\t -r: allocate resources from the named reservation"
     echo -e "\t -s: share node with other users (default: yes)"
     echo -e "\t -t: job length (use SLURM time formats)"
 
@@ -68,7 +70,7 @@ function help() {
 }
 
 function parse_options() {
-    while getopts ":c:m:g:f:p:J:s:t:" opt; do
+    while getopts ":c:m:g:f:p:J:r:s:t:" opt; do
         case $opt in
             c)
                 # make sure -c is passed a valid integer
@@ -97,6 +99,9 @@ function parse_options() {
                 ;;
             J)
                 JOB_NAME=$OPTARG
+                ;;
+            r)
+                RESERVATION=$OPTARG
                 ;;
             s)
                 # make sure -s is passed a valid boolean
@@ -154,6 +159,11 @@ function envsetup() {
         SALLOC_OPTS="$SALLOC_OPTS -J $JOB_NAME"
     else
         SALLOC_OPTS="$SALLOC_OPTS -J $DEF_JOB_NAME"
+    fi
+
+    # check for a specific SLURM reservation
+    if [[ -n "$RESERVATION" ]]; then
+        SALLOC_OPTS="$SALLOC_OPTS --reservation=$RESERVATION"
     fi
 
     # set the job to shared or exclusive mode
