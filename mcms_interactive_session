@@ -1,10 +1,14 @@
 #!/bin/bash
 
-# Copyright (C) 2013 Alan Orth
-# https://github.com/alanorth/hpc_infrastructure_scripts/
 #
-# Copyright (C) 2014 Microway, Inc. All rights reserved.
-# Modified to support generic resources (accelerators) and other SLURM flags.
+# Original script:
+#   Copyright (C) 2013 Alan Orth
+#   https://github.com/alanorth/hpc_infrastructure_scripts/
+#
+# Modified script (with bugfixes and additional feature support):
+#   Copyright (C) 2015 Microway, Inc. All rights reserved.
+#   http://www.microway.com
+#
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -18,6 +22,7 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
 
 #
 # interactive: Obtain interactive shell with slurm allocation
@@ -25,13 +30,14 @@
 # Basically simulates:
 #
 #    salloc -n1 srun --x11 --pty bash
+#
 
 # defaults
 DEF_NUM_CPUS=1
 DEF_PARTITION=interactive
 DEF_JOB_NAME=${USER}-interactive
 
-######
+################################################################################
 
 function help() {
     echo
@@ -62,8 +68,8 @@ function help() {
     echo -e "\t -t: job length (use SLURM time formats)"
 
     echo
-    echo -e "Written by: Alan Orth <a.orth@cgiar.org>"
-    echo -e "Microway modifications by: Eliot Eshelman <eliot@microway.com>"
+    echo -e "Original script written by: Alan Orth <a.orth@cgiar.org>"
+    echo -e "Features and bugfixes by: Microway, Inc. http://www.microway.com/"
     echo
 
     exit 0
@@ -127,9 +133,9 @@ function parse_options() {
 function envsetup() {
     # default is to request 1 CPU, unless more are requested
     if [[ $NUM_CPUS -gt $DEF_NUM_CPUS ]]; then
-        SALLOC_OPTS="-n $NUM_CPUS"
+        SALLOC_OPTS="--cpus-per-task=$NUM_CPUS"
     else
-        SALLOC_OPTS="-n $DEF_NUM_CPUS"
+        SALLOC_OPTS="--cpus-per-task=$DEF_NUM_CPUS"
     fi
 
     # check for memory quantity required (if any)
@@ -149,16 +155,16 @@ function envsetup() {
 
     # see if the user specified a partition
     if [[ -n "$PARTITION" ]]; then
-        SALLOC_OPTS="$SALLOC_OPTS -p $PARTITION"
+        SALLOC_OPTS="$SALLOC_OPTS --partition=$PARTITION"
     else
-        SALLOC_OPTS="$SALLOC_OPTS -p $DEF_PARTITION"
+        SALLOC_OPTS="$SALLOC_OPTS --partition=$DEF_PARTITION"
     fi
 
     # check for a job name
     if [[ -n "$JOB_NAME" ]]; then
-        SALLOC_OPTS="$SALLOC_OPTS -J $JOB_NAME"
+        SALLOC_OPTS="$SALLOC_OPTS --job-name=$JOB_NAME"
     else
-        SALLOC_OPTS="$SALLOC_OPTS -J $DEF_JOB_NAME"
+        SALLOC_OPTS="$SALLOC_OPTS --job-name=$DEF_JOB_NAME"
     fi
 
     # check for a specific SLURM reservation
