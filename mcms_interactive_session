@@ -32,55 +32,67 @@
 #    salloc -n1 srun --x11 --pty bash
 #
 
-# defaults
+
+# Default job parameters
 DEF_NUM_CPUS=1
 DEF_PARTITION=interactive
 DEF_JOB_NAME=${USER}-interactive
 
+
 ################################################################################
 
+PROGNAME=$(basename $0)
+ARGS="$@"
+
+
 function help() {
-    echo
-    echo -e "Obtain an interactive shell on a compute node (via SLURM)."
-    echo
-    echo -e "Usage: `basename $0` [-c] [-m] [-f] [-g] [-p] [-J] [-r] [-s] [-t]"
-    echo
-    echo -e "Optional arguments:"
-    echo -e "\t -c: number of CPU cores to request (default: $DEF_NUM_CPUS)"
-    echo -e "\t -m: number of megabytes of memory to request"
-
-    echo
-    echo -e "\t -g: type and number of generic resources - available options:"
     # List available generic resources in SLURM
-    srun --gres=help | awk '!/Valid gres/ {print "\t\t",$0}' | sort -u
+    GRES=$(srun --gres=help | awk '!/Valid gres/ {print "\t\t",$0}' | sort -u)
 
-    echo
-    echo -e "\t -f: desired node features (combine features by using the | or & operators)"
-    echo -e "\t     Available options:"
     # List available node features in SLURM
-    sinfo --format="%f" | awk '!/FEATURES/ {gsub(",", "\n\t\t "); print "\t\t",$0}' | sort -u
+    FEATURES=$(sinfo --format="%f" | awk '!/FEATURES/ {gsub(",", "\n\t\t "); print "\t\t",$0}' | sort -u)
 
-    echo
-    echo -e "\t -p: partition to run job in (default: $DEF_PARTITION)"
-    echo -e "\t -J: job name (default: $DEF_JOB_NAME)"
-    echo -e "\t -r: allocate resources from the named reservation"
-    echo -e "\t -s: share node with other users (default: yes)"
-    echo -e "\t -t: job length (use SLURM time formats)"
+    cat <<-EOF
 
-    echo
-    echo -e "Original script written by: Alan Orth <a.orth@cgiar.org>"
-    echo -e "Features and bugfixes by: Microway, Inc. http://www.microway.com/"
-    echo
+    Obtain an interactive shell on a compute node (via SLURM).
+
+    Usage: $PROGNAME [-c] [-m] [-g] [-f] [-p] [-J] [-r] [-s] [-t] [-w]
+
+    Optional arguments:
+        -c: number of CPU cores to request (default: $DEF_NUM_CPUS)
+        -m: number of megabytes of memory to request
+        -g: type and number of generic resources - available options:
+    ${GRES:-            none}
+
+        -f: desired node features (combine features with the | or & operators)
+            Available options:
+    ${FEATURES:-            none}
+
+        -p: partition to run job in (default: $DEF_PARTITION)
+        -J: job name (default: $DEF_JOB_NAME)
+        -r: allocate resources from the named reservation
+        -s: share node with other users (default: yes)
+        -t: job length (use SLURM time formats)
+        -w: request a specific node (by name)
+
+
+    Original script written by: Alan Orth <a.orth@cgiar.org>
+    Additional features and bugfixes by: Microway, Inc. http://www.microway.com/
+
+EOF
 
     exit 0
 }
 
+
 function parse_options() {
-    while getopts ":c:m:g:f:p:J:r:s:t:" opt; do
+    while getopts ":c:m:g:f:p:J:r:s:t:w:" opt; do
         case $opt in
             c)
                 # make sure -c is passed a valid integer
                 if ! [[ "$OPTARG" =~ ^[0-9]+$ ]]; then
+                    echo -e "\nRequested CPU cores must be an integer!\n\n"
+
                     help
                 fi
 
@@ -89,6 +101,8 @@ function parse_options() {
             m)
                 # make sure -m is passed a valid integer
                 if ! [[ "$OPTARG" =~ ^[0-9]+$ ]]; then
+                    echo -e "\nMemory capacity request must be an integer!\n\n"
+
                     help
                 fi
 
@@ -123,6 +137,9 @@ function parse_options() {
             t)
                 JOB_TIME=$OPTARG
                 ;;
+            w)
+                NODE_NAME=$OPTARG
+                ;;
             \?|:)
                 help
                 ;;
@@ -130,13 +147,13 @@ function parse_options() {
     done
 }
 
+
 function envsetup() {
-    # default is to request 1 CPU, unless more are requested
-    if [[ $NUM_CPUS -gt $DEF_NUM_CPUS ]]; then
-        SALLOC_OPTS="--cpus-per-task=$NUM_CPUS"
-    else
-        SALLOC_OPTS="--cpus-per-task=$DEF_NUM_CPUS"
-    fi
+    INTERACTIVE_SHELL=/bin/bash
+    INTERACTIVE_SHELL_OPTS="-i -l"
+
+    # request default CPU count, unless more are requested
+    SALLOC_OPTS="--cpus-per-task=${NUM_CPUS:-$DEF_NUM_CPUS}"
 
     # check for memory quantity required (if any)
     if [[ -n "$NUM_MEMORY" ]]; then
@@ -153,19 +170,11 @@ function envsetup() {
         SALLOC_OPTS="$SALLOC_OPTS --constraint=$FEATURES"
     fi
 
-    # see if the user specified a partition
-    if [[ -n "$PARTITION" ]]; then
-        SALLOC_OPTS="$SALLOC_OPTS --partition=$PARTITION"
-    else
-        SALLOC_OPTS="$SALLOC_OPTS --partition=$DEF_PARTITION"
-    fi
+    # see if the user specified a partition, otherwise use default
+    SALLOC_OPTS="$SALLOC_OPTS --partition=${PARTITION:-$DEF_PARTITION}"
 
-    # check for a job name
-    if [[ -n "$JOB_NAME" ]]; then
-        SALLOC_OPTS="$SALLOC_OPTS --job-name=$JOB_NAME"
-    else
-        SALLOC_OPTS="$SALLOC_OPTS --job-name=$DEF_JOB_NAME"
-    fi
+    # check for a job name, otherwise use default
+    SALLOC_OPTS="$SALLOC_OPTS --job-name=${JOB_NAME:-$DEF_JOB_NAME}"
 
     # check for a specific SLURM reservation
     if [[ -n "$RESERVATION" ]]; then
@@ -184,19 +193,22 @@ function envsetup() {
         SALLOC_OPTS="$SALLOC_OPTS --time=$JOB_TIME"
     fi
 
+    # if user specifies a node name, run all the tasks in the specified node
+    if [[ -n "$NODE_NAME" ]]; then
+        SALLOC_OPTS="$SALLOC_OPTS --nodelist=$NODE_NAME"
+    fi
+
     # check if we want X11
     if [[ -n "$DISPLAY" ]]; then
         SRUN_OPTS="--x11 --pty"
     else
         SRUN_OPTS="--pty"
     fi
-
-    INTERACTIVE_SHELL=/bin/bash
-    SHELL_OPTS="-i -l" # not sure if needed
 }
 
+
 # pass the shell's argument array to the parsing function
-parse_options "$@"
+parse_options $ARGS
 
 # setup the defaults
 envsetup
@@ -211,5 +223,5 @@ echo "Please be patient - if the compute nodes are in power-saving mode,"
 echo "it may take 2-3 minutes to start your session..."
 echo
 
-salloc $SALLOC_OPTS srun $SRUN_OPTS $INTERACTIVE_SHELL
+salloc $SALLOC_OPTS srun $SRUN_OPTS $INTERACTIVE_SHELL $INTERACTIVE_SHELL_OPTS
 
