@@ -1,0 +1,18 @@
+#!/bin/sh
+# -*- coding: utf-8 -*-
+# Author: Pär Andersson  (National Supercomputer Centre, Sweden)
+# Version: 0.3 2007-07-30
+#
+
+SCREENSESSION="$1"
+
+# If DISPLAY is set then set that in the screen, then create a new
+# window with that environment and kill the old one.
+if [ "$DISPLAY" != "" ];then
+    screen -S "$SCREENSESSION" -X unsetenv DISPLAY
+    screen -S "$SCREENSESSION" -X setenv DISPLAY "$DISPLAY"
+fi
+
+screen -p0 -S "$SCREENSESSION" -X kill #META tab has outlived its usefulness
+screen -S "$SCREENSESSION" -X screen -t "BASH" 0 bash
+exec screen -p1 -S "$SCREENSESSION" -rd
