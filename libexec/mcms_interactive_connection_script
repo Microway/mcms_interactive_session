@@ -1,0 +1,99 @@
+#!/bin/bash
+################################################################################
+#################################### Microway Cluster Management Software (MCMS)
+################################################################################
+#
+# This tool takes inspiration and code from several projects:
+#
+#   SLURM interactive script - Copyright (C) 2013 Alan Orth
+#   https://github.com/alanorth/hpc_infrastructure_scripts/
+#
+#   sinteractive
+#     * originally written by Pär Andersson (National Supercomputer Centre,
+#       Sweden) and published in the SLURM FAQ.
+#     * Small changes by Paul Mezzanini - Rochester Institute of Technology
+#     * Major changes by Josh McSavaney - Rochester Institute of Technology
+#
+#
+# Modified scripts (with bugfixes and additional feature support):
+#   Copyright (C) 2015 Microway, Inc. All rights reserved.
+#   http://www.microway.com
+#
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+################################################################################
+
+
+################################################################################
+#
+# This script connects a user to their existing screen session (which is started
+# by the mcms_interactive_session utility). That script will SSH into the node
+# that has been reserved by SLURM and run this script.
+#
+################################################################################
+
+
+# Exit if this script isn't actually running within a SLURM context
+if [[ "$1" != "ConnectToInteractiveSession" ]]; then
+    echo "Do not run this script manually - it is used by SLURM"
+    exit 1
+fi
+
+
+SCREENSESSION="$2"
+
+SCRIPT_DIR="$( dirname "$( readlink -f "${BASH_SOURCE[0]}" )" )"
+
+
+# There is a possible race condition here. If the job has just started, we
+# might be trying to connect to the screen session before it has finished
+# initializing. We will most likely need to wait a moment.
+for (( i=0; i<100; i++ )); do
+    screen -S "$SCREENSESSION" -X unsetenv VARIABLE_DOES_NOT_EXIST &> /dev/null
+
+    if [[ $? -eq 0 ]]; then
+        break
+    fi
+
+    sleep 0.1
+done
+
+
+# If DISPLAY is set then send it to the screen session (for X11 forwarding)
+if [[ -n "$DISPLAY" ]]; then
+    screen -S "$SCREENSESSION" -X unsetenv DISPLAY
+    screen -S "$SCREENSESSION" -X setenv DISPLAY "$DISPLAY"
+fi
+
+
+# Start up a shell session for the user
+screen -S "$SCREENSESSION" -X screen -t "bash" 1 bash
+
+# Start up a splash screen with a welcome message
+screen -S "$SCREENSESSION" -X screen -t "Help" 2 ${SCRIPT_DIR}/../libexec/mcms_interactive_splash
+
+# Remove the META tab, which has outlived its usefulness
+screen -p0 -S "$SCREENSESSION" -X kill
+
+# Start up an htop or top session (depending upon which is available)
+screen -S "$SCREENSESSION" -X screen -t "Top" 0 bash -ic 'htop 2>/dev/null || top'
+
+
+#
+# Reconnect to the screen session.
+#
+# The user can finally get to work!!
+#
+exec screen -p2 -S "$SCREENSESSION" -dr

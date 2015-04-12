@@ -1,0 +1,465 @@
+#!/bin/bash
+################################################################################
+#################################### Microway Cluster Management Software (MCMS)
+################################################################################
+#
+# This tool takes inspiration and code from several projects:
+#
+#   SLURM interactive script - Copyright (C) 2013 Alan Orth
+#   https://github.com/alanorth/hpc_infrastructure_scripts/
+#
+#   sinteractive
+#     * originally written by Pär Andersson (National Supercomputer Centre,
+#       Sweden) and published in the SLURM FAQ.
+#     * Small changes by Paul Mezzanini - Rochester Institute of Technology
+#     * Major changes by Josh McSavaney - Rochester Institute of Technology
+#
+#
+# Modified scripts (with bugfixes and additional feature support):
+#   Copyright (C) 2015 Microway, Inc. All rights reserved.
+#   http://www.microway.com
+#
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+################################################################################
+
+
+################################################################################
+#
+# Provide cluster users with an easy-to-use shell login to compute node(s). This
+# type of usage is typically called an 'interactive' session that is managed by
+# the cluster's Batch Scheduler / Resource Manager (e.g. SLURM, TORQUE).
+#
+# The interactive sessions provide X11 Windows forwarding, multiple tabs (via
+# the ubiquitous screen utility) and resource monitoring (via htop/top).
+#
+################################################################################
+
+
+PROGNAME=$(basename $0)
+
+# This variable will be exported so our supporting scripts can be found
+export SCRIPT_DIR="$( dirname "$( readlink -f "${BASH_SOURCE[0]}" )" )"
+
+
+function help() {
+    # List available generic resources in SLURM
+    GRES=$(srun --gres=help | awk '!/Valid gres/ {print "\t\t",$0}' | sort -u)
+
+    # List available node features in SLURM
+    FEATURES=$(sinfo --format="%f" | awk '!/FEATURES/ {gsub(",", "\n\t\t "); print "\t\t",$0}' | sort -u)
+
+    cat <<-EOF
+
+    Obtain an interactive shell on a compute node (via batch scheduler).
+
+    Usage: $PROGNAME [-c] [-m] [-g] [-f] [-p] [-J] [-r] [-s] [-t] [-w]
+
+    Optional arguments:
+        -c: number of CPU cores to request (default: $DEF_NUM_CPUS)
+        -m: number of megabytes of memory to request (default: $DEF_MEM)
+        -g: type and number of generic resources - available options:
+    ${GRES:-            none}
+
+        -f: desired node features (combine features with the | or & operators)
+            Available options:
+    ${FEATURES:-            none}
+
+        -p: partition to run job in (default: $DEF_PARTITION)
+        -J: job name (default: $DEF_JOB_NAME)
+        -r: allocate resources from the named reservation
+        -s: share node with other users (default: yes)
+        -t: job length (use SLURM time formats) (default: $DEF_JOB_LENGTH)
+        -w: request a specific node (by name)
+
+
+    This tool takes inspiration and code from several projects:
+      SLURM interactive script - Copyright (C) 2013 Alan Orth
+      sinteractive (originally written by Pär Andersson)
+                   (small changes by Paul Mezzanini)
+                   (major changes by Josh McSavaney)
+
+    Modified scripts (with bugfixes and additional feature support):
+      Copyright (C) 2015 Microway, Inc. All rights reserved.
+      http://www.microway.com
+
+EOF
+
+    exit 0
+}
+
+
+function TPUT() {
+    # check for TTY and tput; redefine *this* function based upon the results
+    if [[ -t 1 && -t 2 ]] && command -v "tput" >& /dev/null ; then
+        function TPUT()
+        {
+            tput "$@"
+        }
+    else
+        function TPUT() { : ; }
+    fi
+
+    # call whichever version of the function was detected above
+    TPUT "$@"
+}
+
+
+# Print a color-coded error message
+function ERROR() {
+    TPUT setaf 1 >&2
+    while read; do
+        echo -e "ERROR: $REPLY"
+    done <<< "$@" >&2
+    TPUT sgr0 >&2
+}
+
+
+# Print a color-coded warning message
+function WARN() {
+    TPUT setaf 3
+    while read; do
+        echo -e "WARNING: $REPLY"
+    done <<< "$@"
+    TPUT sgr0
+}
+
+
+# Print a color-coded message
+function INFO() {
+    TPUT setaf 2
+    while read; do
+        echo -e "$REPLY"
+    done <<< "$@"
+    TPUT sgr0
+}
+
+
+# Print a temporary (to be quickly replaced) color-coded message
+function UPDATE() {
+    TPUT setaf 2
+    while read; do
+        echo -e -n "\r                                                            "
+        echo -e -n "\r$REPLY"
+    done <<< "$@"
+    TPUT sgr0
+}
+
+
+# Print a spinner (rotates once each time it is called)
+current_spinner_position=0
+declare -A spinner_positions
+spinner_positions[0]="-"
+spinner_positions[1]="\\"
+spinner_positions[2]="|"
+spinner_positions[3]="/"
+function print_spinner() {
+    if [[ ${current_spinner_position} -gt 3 ]]; then
+        current_spinner_position=0
+    fi
+
+    TPUT setaf 2
+    echo -n "${spinner_positions[$current_spinner_position]}"
+    TPUT sgr0
+
+    current_spinner_position=$(( $current_spinner_position + 1 ))
+}
+
+
+function exit_handler() {
+    local error_code="$?"
+
+    if [[ $error_code -eq 0 ]]; then
+        # No errors were encountered - exit cleanly
+        return 0;
+    else
+        echo
+        echo
+        ERROR "Your interactive session was interrupted or killed."
+        echo
+
+        # Make sure the job is really stopped
+        sleep 1
+        scancel --quiet ${JOB_ID}
+
+        exit $error_code
+    fi
+}
+
+
+function read_config_files()
+{
+    # Read the global configuration file (assuming it's available)
+    if [[ -r "$SCRIPT_DIR"/mcms_interactive_session.conf ]]; then
+        source "$SCRIPT_DIR"/mcms_interactive_session.conf
+    else
+        echo
+        WARN "Unable to read the global configuration file:"
+        WARN "    $SCRIPT_DIR/mcms_interactive_session.conf"
+        echo
+    fi
+
+    # Read in any configuration settings specified in the user's own config file
+    if [[ -r ~/.mcms_interactive_session.conf ]]; then
+        source ~/.mcms_interactive_session.conf
+    fi
+
+    # If you want to change the default values used in this script, DO NOT
+    # change the values listed here. Instead, change them in your global
+    # configuration file:
+    #
+    #  $SCRIPT_DIR/mcms_interactive_session.conf
+    #
+    DEF_NUM_CPUS=${DEF_NUM_CPUS:-1}
+    DEF_MEM=${DEF_MEM:-4096}
+    DEF_PARTITION=${DEF_PARTITION:-interactive}
+    DEF_JOB_LENGTH=${DEF_JOB_LENGTH:-4:00:00}
+    DEF_JOB_NAME=${DEF_JOB_NAME:-${USER}-interactive}
+    STARTUP_TIMEOUT=${STARTUP_TIMEOUT:-300}
+}
+
+
+function parse_options() {
+    while getopts ":c:m:g:f:p:J:r:s:t:w:" opt; do
+        case $opt in
+            c)
+                # make sure -c is passed a valid integer
+                if ! [[ "$OPTARG" =~ ^[0-9]+$ ]]; then
+                    echo
+                    ERROR "Requested CPU cores must be an integer!"
+
+                    help
+                fi
+
+                NUM_CPUS=$OPTARG
+                ;;
+            m)
+                # make sure -m is passed a valid integer
+                if ! [[ "$OPTARG" =~ ^[0-9]+$ ]]; then
+                    echo
+                    ERROR "Memory capacity request must be an integer!"
+
+                    help
+                fi
+
+                NUM_MEMORY=$OPTARG
+                ;;
+            g)
+                GRES=$OPTARG
+                ;;
+            f)
+                FEATURES=$OPTARG
+                ;;
+            p)
+                PARTITION=$OPTARG
+                ;;
+            J)
+                JOB_NAME=$OPTARG
+                ;;
+            r)
+                RESERVATION=$OPTARG
+                ;;
+            s)
+                # make sure -s is passed a valid boolean
+                OPTARG=${OPTARG:0:1}
+                if [[ "$OPTARG" == "0" ]] || [[ "${OPTARG^^}" == "N" ]]; then
+                    SHARE_NODE=0
+                elif [[ "$OPTARG" == "1" ]] || [[ "${OPTARG^^}" == "Y" ]]; then
+                    SHARE_NODE=1
+                else
+                    echo
+                    ERROR "Specify 'yes' or 'no' for node sharing!"
+
+                    help
+                fi
+                ;;
+            t)
+                JOB_LENGTH=$OPTARG
+                ;;
+            w)
+                NODE_NAME=$OPTARG
+                ;;
+            \?|:)
+                help
+                ;;
+        esac
+    done
+}
+
+
+function assemble_allocation_options() {
+    # request default CPU count, unless more are requested
+    SBATCH_OPTS="--cpus-per-task=${NUM_CPUS:-$DEF_NUM_CPUS}"
+
+    # request default memory quantity, unless more is requested
+    SBATCH_OPTS="$SBATCH_OPTS --mem=${NUM_MEMORY:-$DEF_MEM}"
+
+    # check for generic resource requirements (if any)
+    if [[ -n "$GRES" ]]; then
+        SBATCH_OPTS="$SBATCH_OPTS --gres=$GRES"
+    fi
+
+    # check for required features (if any)
+    if [[ -n "$FEATURES" ]]; then
+        SBATCH_OPTS="$SBATCH_OPTS --constraint=$FEATURES"
+    fi
+
+    # see if the user specified a partition, otherwise use default
+    SBATCH_OPTS="$SBATCH_OPTS --partition=${PARTITION:-$DEF_PARTITION}"
+
+    # check for a job name, otherwise use default
+    SBATCH_OPTS="$SBATCH_OPTS --job-name=${JOB_NAME:-$DEF_JOB_NAME}"
+
+    # check for a specific SLURM reservation
+    if [[ -n "$RESERVATION" ]]; then
+        SBATCH_OPTS="$SBATCH_OPTS --reservation=$RESERVATION"
+    fi
+
+    # set the job to shared or exclusive mode (if specified)
+    if [[ -n "$SHARE_NODE" ]] && [[ "$SHARE_NODE" -eq 0 ]]; then
+        SBATCH_OPTS="$SBATCH_OPTS --exclusive"
+    else
+        SBATCH_OPTS="$SBATCH_OPTS --share"
+    fi
+
+    # set the job's time requirments (or use the default)
+    SBATCH_OPTS="$SBATCH_OPTS --time=${JOB_LENGTH:-$DEF_JOB_LENGTH}"
+
+    # if user specifies a node name, run all the tasks in the specified node
+    if [[ -n "$NODE_NAME" ]]; then
+        SBATCH_OPTS="$SBATCH_OPTS --nodelist=$NODE_NAME"
+    fi
+
+    # A few additional arguments must be passed
+    SBATCH_OPTS="$SBATCH_OPTS
+                    --output=/dev/stdout
+                    --error=/dev/stderr
+                    --export SCRIPT_DIR
+                "
+}
+
+
+
+# Read the settings out of the configuration files
+read_config_files
+
+# Review the command-line arguments provided by the user
+parse_options "$@"
+
+# Setup the command-line arguments we'll pass
+assemble_allocation_options
+
+
+
+# This script will be started on the remote node (by the batch scheduler)
+BATCH_SCRIPT="${SCRIPT_DIR}/../libexec/mcms_interactive_batch_script"
+
+# This script will be called by SSH (to connect the user to their session)
+CONNECTION_SCRIPT="${SCRIPT_DIR}/../libexec/mcms_interactive_connection_script"
+
+
+
+UPDATE "Obtaining your interactive shell session..."
+
+SBATCH_OUTPUT=$(sbatch $SBATCH_OPTS ${BATCH_SCRIPT})
+SBATCH_RETURN_CODE=$?
+
+if [[ ${SBATCH_RETURN_CODE} -gt 0 ]]; then
+    echo
+    ERROR "Failed to create your interactive session!"
+    ERROR "Please read the above errors (if any) and double-check your settings."
+    echo
+    exit 1
+fi
+
+# sbatch will return output like: "Submitted batch job 5740"
+JOB_ID=${SBATCH_OUTPUT##* }
+
+
+# Trap all exits (both with and without errors)
+trap exit_handler EXIT
+
+# Remap errors and interrupts to exit (to prevent two calls to the handler)
+trap exit ERR INT TERM
+
+
+# Check to see if the job immediately failed
+if scontrol show job $JOB_ID 2>/dev/null | grep -q "JobState=FAILED"; then
+    echo
+    ERROR "Sessions are not working correctly. Please contact an administrator."
+    echo
+    exit 1
+fi
+
+
+WAITING_MESSAGE="Waiting for your session to start... "
+while : ; do
+    UPDATE "${WAITING_MESSAGE}"
+    print_spinner
+    sleep 0.1
+
+    # Check the current status of the job
+    STATUS=$(squeue --jobs=${JOB_ID} --noheader --format=%T)
+
+    if [[ "${STATUS}" == "RUNNING" ]]; then
+        UPDATE "Job is running - connecting to node."
+        echo
+        break
+    elif [[ "${STATUS}" == "CONFIGURING" ]]; then
+        # If a node has to be configured, that means it was powered off
+        UPDATE "Your node is now powering up!"
+        echo
+        WAITING_MESSAGE="Please be patient - this will take ~3-minutes... "
+    fi
+
+    if [[ ${STARTUP_TIMEOUT} -le 0 ]]; then
+        # We've waited longer than the user wants - cancel the request
+        echo
+        INFO "Your job has been waiting too long (${STARTUP_TIMEOUT} seconds)."
+        INFO "The interactive session request has been canceled."
+        INFO "If you wish, you can specify a longer timeout by running:"
+        echo
+        INFO "echo STARTUP_TIMEOUT='$(( ${STARTUP_TIMEOUT} * 10 ))' >> ~/.mcms_interactive_session.conf"
+        echo
+        echo
+
+        if [[ "${STATUS}" == "PENDING" ]]; then
+            INFO "The queue is currently full (or job is stuck for another reason)"
+        else
+            INFO "There may have been a problem with the job. It's state was: ${STATUS}"
+        fi
+
+        exit 1
+    fi
+
+    (( STARTUP_TIMEOUT-- ))
+    sleep 1
+done
+
+
+# Determine the first node in the list of allocated compute nodes
+FIRST_NODE=$(scontrol show jobid ${JOB_ID} | awk 'BEGIN {FS = "=|,"}; / NodeList/ {print $2}')
+INFO "Logging into compute node: ${FIRST_NODE}"
+
+# SSH into the node and attach to the screen session (we pass an additional
+# string to help the remote script sanity-check its environment)
+ssh -X -o StrictHostKeyChecking=no -t        \
+    ${FIRST_NODE} ${CONNECTION_SCRIPT}       \
+    "ConnectToInteractiveSession" "session${JOB_ID}"
+
+
+# Execution will remain on the above line until the session is complete
+INFO "Session has been closed. Cleaning up..."
+

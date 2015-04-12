@@ -1,0 +1,75 @@
+#!/bin/bash
+################################################################################
+#################################### Microway Cluster Management Software (MCMS)
+################################################################################
+#
+# This tool takes inspiration and code from several projects:
+#
+#   SLURM interactive script - Copyright (C) 2013 Alan Orth
+#   https://github.com/alanorth/hpc_infrastructure_scripts/
+#
+#   sinteractive
+#     * originally written by Pär Andersson (National Supercomputer Centre,
+#       Sweden) and published in the SLURM FAQ.
+#     * Small changes by Paul Mezzanini - Rochester Institute of Technology
+#     * Major changes by Josh McSavaney - Rochester Institute of Technology
+#
+#
+# Modified scripts (with bugfixes and additional feature support):
+#   Copyright (C) 2015 Microway, Inc. All rights reserved.
+#   http://www.microway.com
+#
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+################################################################################
+
+
+tput setaf 2
+echo "Welcome to sinteractive!"
+tput sgr0
+
+cat <<"EOF"
+
+This is really just a fancy-dancy screen session.
+
+You'll find at the bottom of your terminal that there are multiple "tabs" open.
+These tabs, or regions, all exist within a single encompassing screen "session."
+One of these tabs is a BASH prompt and another is HTOP, so you can monitor the
+utilization of the system to which you were scheduled in real time.
+
+Please be sure to close out of sinteractive when you're done.
+
+Here are some useful screen commands.
+
+Key sequence    Result
+-------------------------------------------------------------------------------
+ctrl+a ?        Display screen's command list
+ctrl+a c        Create a new tab (with shell)
+ctrl+a k        Close the current tab
+ctrl+a n/p      Proceed to the next (n) or previous (p) tab
+ctrl+a <num>    Jump to tab <num>
+ctrl+a Esc      Scroll back through text in the tab (press 'q' to stop)
+ctrl+a d        Detach from the session (in our case, kill sinteractive)
+
+EOF
+tput setaf 1
+echo "WARNING: if you detach from this screen session, your job will be killed."
+tput setaf 2
+echo
+echo "To continue, close this region"
+tput sgr0
+
+trap '{ :; }' INT
+while : ; do dd &>/dev/null ; done

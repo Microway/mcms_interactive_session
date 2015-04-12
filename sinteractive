@@ -56,7 +56,7 @@ function INFO()
 
 function READ_CONFIG()
 {
-    [[ -r "$MYDIR"/sinteractive.conf ]] && . "$MYDIR"/sinteractive.conf
+    [[ -r "$SCRIPT_DIR"/sinteractive.conf ]] && . "$SCRIPT_DIR"/sinteractive.conf
     [[ -r ~/.sinteractive.conf ]] && . ~/.sinteractive.conf
     DEFCPU="${DEFCPU:=2}"
     DEFMEM="${DEFMEM:=4096}"
@@ -69,12 +69,12 @@ function READ_CONFIG()
     TIMEOUT="${TIMEOUT:=60}"
 }
 
-export MYDIR="$( dirname "$( readlink -f "${BASH_SOURCE[0]}" )" )"
+export SCRIPT_DIR="$( dirname "$( readlink -f "${BASH_SOURCE[0]}" )" )"
 
 # Batch Script that starts SCREEN
-BS="${MYDIR}/_interactive"
+BS="${SCRIPT_DIR}/_interactive"
 # Interactive screen script
-IS="${MYDIR}/_interactive_screen"
+IS="${SCRIPT_DIR}/_interactive_screen"
 READ_CONFIG
 
 INFO ">Please enter your resource requirements.<"
@@ -112,7 +112,7 @@ declare -a SBATCH_ARGS
 
 SBATCH_ARGS=( --cpus-per-task="${REQCPU}" --mem="${REQMEM}" \
     --time="${REQTIME}" --partition="${PARTITION}"\
-    --output=/dev/null --error=/dev/null --export MYDIR )
+    --output=/dev/null --error=/dev/null --export SCRIPT_DIR )
 
 if [[ $USE_QOS = "yes" ]]; then
     SBATCH_ARGS+=( --qos="${QOS}" )
