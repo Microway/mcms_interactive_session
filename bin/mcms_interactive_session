@@ -53,6 +53,9 @@ PROGNAME=$(basename $0)
 # This variable will be exported so our supporting scripts can be found
 export SCRIPT_DIR="$( dirname "$( readlink -f "${BASH_SOURCE[0]}" )" )"
 
+GLOBAL_CONFIG="$SCRIPT_DIR"/../mcms_interactive_session.conf
+USER_CONFIG="~/.mcms_interactive_session.conf"
+
 
 function help() {
     # List available generic resources in SLURM
@@ -202,8 +205,8 @@ function exit_handler() {
 function read_config_files()
 {
     # Read the global configuration file (assuming it's available)
-    if [[ -r "$SCRIPT_DIR"/mcms_interactive_session.conf ]]; then
-        source "$SCRIPT_DIR"/mcms_interactive_session.conf
+    if [[ -r "${GLOBAL_CONFIG}" ]]; then
+        source "${GLOBAL_CONFIG}"
     else
         echo
         WARN "Unable to read the global configuration file:"
@@ -212,15 +215,18 @@ function read_config_files()
     fi
 
     # Read in any configuration settings specified in the user's own config file
-    if [[ -r ~/.mcms_interactive_session.conf ]]; then
-        source ~/.mcms_interactive_session.conf
+    if [[ -r "${USER_CONFIG}" ]]; then
+        echo
+        INFO "Reading your custom settings from "${USER_CONFIG}""
+        echo
+        source "${USER_CONFIG}"
     fi
 
     # If you want to change the default values used in this script, DO NOT
     # change the values listed here. Instead, change them in your global
     # configuration file:
     #
-    #  $SCRIPT_DIR/mcms_interactive_session.conf
+    #  $GLOBAL_CONFIG
     #
     DEF_NUM_CPUS=${DEF_NUM_CPUS:-1}
     DEF_MEM=${DEF_MEM:-4096}
@@ -351,6 +357,35 @@ function assemble_allocation_options() {
 }
 
 
+function job_timed_out() {
+    # We've waited longer than the user wants - cancel the request
+    echo
+    echo
+    WARN "Your job has been waiting too long (${STARTUP_TIMEOUT} seconds)."
+    WARN "The interactive session request has been canceled."
+    echo
+    INFO "If you wish, you can specify a longer timeout by running:"
+    echo
+    INFO "  echo STARTUP_TIMEOUT='$(( ${STARTUP_TIMEOUT} * 10 ))' >> ${USER_CONFIG}"
+    echo
+    echo
+
+    if [[ "${STATUS}" == "PENDING" ]]; then
+        INFO "The queue is currently full (or job is stuck for another reason)"
+    else
+        INFO "There may have been a problem with the job. Its state was: ${STATUS}"
+    fi
+
+    # Show the full job status for debugging purposes.
+    echo
+    INFO "$(scontrol show jobid ${JOB_ID})"
+    echo
+    echo
+
+    exit 1
+}
+
+
 
 # Read the settings out of the configuration files
 read_config_files
@@ -371,6 +406,7 @@ CONNECTION_SCRIPT="${SCRIPT_DIR}/../libexec/mcms_interactive_connection_script"
 
 
 
+echo
 UPDATE "Obtaining your interactive shell session..."
 
 SBATCH_OUTPUT=$(sbatch $SBATCH_OPTS ${BATCH_SCRIPT})
@@ -386,6 +422,9 @@ fi
 
 # sbatch will return output like: "Submitted batch job 5740"
 JOB_ID=${SBATCH_OUTPUT##* }
+INFO " granted jobid # ${JOB_ID}"
+echo
+echo
 
 
 # Trap all exits (both with and without errors)
@@ -404,53 +443,104 @@ if scontrol show job $JOB_ID 2>/dev/null | grep -q "JobState=FAILED"; then
 fi
 
 
-WAITING_MESSAGE="Waiting for your session to start... "
+
+# The ideal sequence of job states (assuming no errors) would be:
+#
+#  1. PENDING
+#  2. CONFIGURING (this might be skipped)
+#  3. RUNNING
+#
+# If the job goes into a CONFIGURING state, then the compute node must be
+# prepared before use (it was probably powered off).
+#
+#
+# The ideal sequence of node states (assuming no errors) would be:
+#
+#  1. IDLE (possibly with a ~ postfix)
+#  2. ALLOCATED~
+#  3. ALLOCATED#
+#  4. ALLOCATED
+#
+#
+# There are many other possible conditions, but they'll result in a failed
+# session. We'll assume everything is going well (but will watch for errors)
+#
+CURRENT_STATE=1
+WAITING_MESSAGE="Waiting for your job to start... "
+TIMER=0
+
 while : ; do
-    UPDATE "${WAITING_MESSAGE}"
+    UPDATE "${WAITING_MESSAGE:-}${POWER_UP_MESSAGE:-}"
     print_spinner
-    sleep 0.1
 
-    # Check the current status of the job
-    STATUS=$(squeue --jobs=${JOB_ID} --noheader --format=%T)
+    if [[ ${CURRENT_STATE} -eq 1 ]]; then
+        STATUS=$(squeue --jobs=${JOB_ID} --noheader --format=%T)
 
-    if [[ "${STATUS}" == "RUNNING" ]]; then
-        UPDATE "Job is running - connecting to node."
-        echo
-        break
-    elif [[ "${STATUS}" == "CONFIGURING" ]]; then
-        # If a node has to be configured, that means it was powered off
-        UPDATE "Your node is now powering up!"
-        echo
-        WAITING_MESSAGE="Please be patient - this will take ~3-minutes... "
+        if [[ "${STATUS}" != "PENDING" ]]; then
+            # The job is no longer PENDING in the queue. If all went well,
+            # it is now in the CONFIGURING or RUNNING state.
+            CURRENT_STATE=2
+        fi
     fi
 
-    if [[ ${STARTUP_TIMEOUT} -le 0 ]]; then
-        # We've waited longer than the user wants - cancel the request
-        echo
-        INFO "Your job has been waiting too long (${STARTUP_TIMEOUT} seconds)."
-        INFO "The interactive session request has been canceled."
-        INFO "If you wish, you can specify a longer timeout by running:"
-        echo
-        INFO "echo STARTUP_TIMEOUT='$(( ${STARTUP_TIMEOUT} * 10 ))' >> ~/.mcms_interactive_session.conf"
-        echo
-        echo
-
-        if [[ "${STATUS}" == "PENDING" ]]; then
-            INFO "The queue is currently full (or job is stuck for another reason)"
-        else
-            INFO "There may have been a problem with the job. It's state was: ${STATUS}"
+    if [[ ${CURRENT_STATE} -eq 2 ]]; then
+        # Determine the first node in the list of allocated compute nodes
+        if [[ -z "${FIRST_NODE:-}" ]]; then
+            FIRST_NODE=$(scontrol show jobid ${JOB_ID} | awk 'BEGIN {FS = "=|,"}; / NodeList/ {print $2}')
         fi
 
-        exit 1
+        # If a node is being powered up, we must wait for that to complete
+        NODE_STATUS=$(sinfo --nodes=${FIRST_NODE} --noheader --format=%T)
+
+        # SLURM indicates the power saving status by postfixing a '~' character
+        POWER_SAVE_CHECK="${NODE_STATUS##*~}"
+        # SLURM indicates the power_up status by postfixing a '#' character
+        POWER_UP_CHECK="${NODE_STATUS##*#}"
+
+        if [[ -z "${POWER_UP_CHECK}" || -z "${POWER_SAVE_CHECK}" ]]; then
+            # The node is still powering up...
+            if [[ -n "${WAITING_MESSAGE}" ]]; then
+                UPDATE "Your node is now powering up!"
+                echo
+                echo
+                WAITING_MESSAGE=""
+                POWER_UP_MESSAGE="Please be patient - this will take ~3-minutes... "
+            fi
+        else
+            # The node is not in a powering up state. If all is going correctly,
+            # it will now be in an ALLOCATED or MIXED state. Job will be RUNNING
+            CURRENT_STATE=3
+        fi
     fi
 
-    (( STARTUP_TIMEOUT-- ))
+    if [[ ${CURRENT_STATE} -eq 3 ]]; then
+        # The node is powered up, but could be in any state:
+        #   ALLOCATED, COMPLETING, DOWN, DRAINED, DRAINING, ERROR, FAIL, FAILING,
+        #   FUTURE, IDLE, MAINT, MIXED, NO_RESPOND, NPC, PERFCTRS, RESERVED, UNKNOWN
+        if [[ -n "${POWER_UP_MESSAGE}" ]]; then
+            POWER_UP_MESSAGE=""
+            WAITING_MESSAGE="Waiting for your session to start... "
+        fi
+
+        # If the job says it is running, then we can assume the node is healthy
+        STATUS=$(squeue --jobs=${JOB_ID} --noheader --format=%T)
+
+        if [[ "${STATUS}" == "RUNNING" ]]; then
+            UPDATE "Job is running - making connecting to node... "
+            echo
+            break
+        fi
+    fi
+
+    if [[ ${TIMER} -gt ${STARTUP_TIMEOUT} ]]; then
+        job_timed_out
+    fi
+
+    TIMER=$(( $TIMER + 1 ))
     sleep 1
 done
 
 
-# Determine the first node in the list of allocated compute nodes
-FIRST_NODE=$(scontrol show jobid ${JOB_ID} | awk 'BEGIN {FS = "=|,"}; / NodeList/ {print $2}')
 INFO "Logging into compute node: ${FIRST_NODE}"
 
 # SSH into the node and attach to the screen session (we pass an additional

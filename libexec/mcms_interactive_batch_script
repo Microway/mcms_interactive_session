@@ -54,7 +54,7 @@ if [[ -z "$SLURM_JOB_ID" ]]; then
 fi
 
 
-SCREEN_RC="${SCRIPT_DIR}"/mcms_interactive_screenrc.conf
+SCREEN_RC="${SCRIPT_DIR}"/../mcms_interactive_screenrc.conf
 
 if [[ ! -r "${SCREEN_RC}" ]]; then
     echo "Unable to locate the necessary screenrc file:"
