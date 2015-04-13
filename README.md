@@ -11,8 +11,8 @@ ubiquitous screen utility) and resource monitoring (via htop/top).
 
 ###Usage
 
-Ensure the mcms_interactive_session script is in your PATH (usually this is
-already done for you by the system administrator. From your shell, run:
+Ensure the `mcms_interactive_session` script is in your PATH (usually this is
+already done for you by the system administrator). From your shell, run:
 `mcms_interactive_session`
 
 To see a full list of options, run:
@@ -21,7 +21,7 @@ To see a full list of options, run:
 The script will allocate the requested cluster resources, wait for them to
 become available and then log you into the compute node. You may specify which
 resources you require via command-line arguments (or via your own configuration
-file: ~/.mcms_interactive_session.conf). Your administrator may have also set up
+file: `~/.mcms_interactive_session.conf`). Your administrator may have also set up
 a system-wide configuration file (but any options you specify will over-ride the
 default settings in the system-wide configuration file).
 
@@ -38,16 +38,16 @@ default settings in the system-wide configuration file).
 ###Installation Instructions
 
 Copy all of the files in this repo to the _same_ directory on your cluster's
-Head/Login node(s). It's advisable to add this directory into PATH. If you're
-just a user of the cluster (not a sysadmin), you can just put these files
-somewhere in your own home directory and run it from there.
+Head/Login node(s). It's advisable to add the `bin/` directory into PATH. If
+you're just a user of the cluster (not a sysadmin), you can just put these
+files somewhere in your own home directory and run it from there.
 
 ###Author & Credits
 
 This utility is maintained by Microway, Inc. as part of the MCMS toolkit
 (Microway Cluster Management Software). http://www.microway.com
 
-This tool is a best-of-breed mashup of several existing projects:
+**This tool is a best-of-breed mashup of several existing projects:**
 
 ####sinteractive
 Scripts were originally written by Pär Andersson (National Supercomputer Centre, Sweden) and published in the SLURM FAQ.
