@@ -79,7 +79,7 @@ fi
 
 
 # Start up a shell session for the user
-screen -S "$SCREENSESSION" -X screen -t "bash" 1 bash
+screen -S "$SCREENSESSION" -X screen -t "bash" 1 bash -i -l
 
 # Start up a splash screen with a welcome message
 screen -S "$SCREENSESSION" -X screen -t "Help" 2 ${SCRIPT_DIR}/../libexec/mcms_interactive_splash
@@ -88,7 +88,8 @@ screen -S "$SCREENSESSION" -X screen -t "Help" 2 ${SCRIPT_DIR}/../libexec/mcms_i
 screen -p0 -S "$SCREENSESSION" -X kill
 
 # Start up an htop or top session (depending upon which is available)
-screen -S "$SCREENSESSION" -X screen -t "Top" 0 bash -ic 'htop 2>/dev/null || top'
+screen -S "$SCREENSESSION" -X screen -t "Top" 0 bash -i -c 'htop 2>/dev/null || top'
+
 
 
 #

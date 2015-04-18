@@ -53,6 +53,9 @@ PROGNAME=$(basename $0)
 # This variable will be exported so our supporting scripts can be found
 export SCRIPT_DIR="$( dirname "$( readlink -f "${BASH_SOURCE[0]}" )" )"
 
+export SLURM_PATH="$( dirname "$( readlink -f "$(which squeue)" )" )"
+
+
 GLOBAL_CONFIG="$SCRIPT_DIR"/../mcms_interactive_session.conf
 USER_CONFIG="~/.mcms_interactive_session.conf"
 
@@ -350,6 +353,7 @@ function assemble_allocation_options() {
 
     # A few additional arguments must be passed
     SBATCH_OPTS="$SBATCH_OPTS
+                    --ntasks=1
                     --output=/dev/stdout
                     --error=/dev/stderr
                     --export SCRIPT_DIR
@@ -417,7 +421,7 @@ if [[ ${SBATCH_RETURN_CODE} -gt 0 ]]; then
     ERROR "Failed to create your interactive session!"
     ERROR "Please read the above errors (if any) and double-check your settings."
     echo
-    exit 1
+    exit ${SBATCH_RETURN_CODE}
 fi
 
 # sbatch will return output like: "Submitted batch job 5740"
@@ -456,9 +460,9 @@ fi
 #
 # The ideal sequence of node states (assuming no errors) would be:
 #
-#  1. IDLE (possibly with a ~ postfix)
-#  2. ALLOCATED~
-#  3. ALLOCATED#
+#  1. IDLE         (possibly with a ~ postfix)
+#  2. ALLOCATED~   (this might be skipped)
+#  3. ALLOCATED#   (this might be skipped)
 #  4. ALLOCATED
 #
 #
@@ -526,7 +530,7 @@ while : ; do
         STATUS=$(squeue --jobs=${JOB_ID} --noheader --format=%T)
 
         if [[ "${STATUS}" == "RUNNING" ]]; then
-            UPDATE "Job is running - making connecting to node... "
+            UPDATE "Job is running - making connection to node... "
             echo
             break
         fi
@@ -551,5 +555,6 @@ ssh -X -o StrictHostKeyChecking=no -t        \
 
 
 # Execution will remain on the above line until the session is complete
+echo
 INFO "Session has been closed. Cleaning up..."
-
+echo

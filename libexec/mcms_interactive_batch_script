@@ -62,5 +62,6 @@ if [[ ! -r "${SCREEN_RC}" ]]; then
     exit 1
 fi
 
-exec screen -c "${SCREEN_RC}" -Dm -S "session$SLURM_JOB_ID"
+
+srun --pty --nodes=1 /usr/bin/screen -c "${SCREEN_RC}" -Dm -S "session$SLURM_JOB_ID"
 
