@@ -59,7 +59,7 @@ SCRIPT_DIR="$( dirname "$( readlink -f "${BASH_SOURCE[0]}" )" )"
 
 # There is a possible race condition here. If the job has just started, we
 # might be trying to connect to the screen session before it has finished
-# initializing. We will most likely need to wait a moment.
+# initializing. We will most likely need to wait a moment (up to 10 seconds).
 for (( i=0; i<100; i++ )); do
     screen -S "$SCREENSESSION" -X unsetenv VARIABLE_DOES_NOT_EXIST &> /dev/null
 
@@ -75,6 +75,21 @@ done
 if [[ -n "$DISPLAY" ]]; then
     screen -S "$SCREENSESSION" -X unsetenv DISPLAY
     screen -S "$SCREENSESSION" -X setenv DISPLAY "$DISPLAY"
+
+    #
+    # Some environments do not properly set the XAUTHORITY environment variable.
+    # We will check if this variable exists within the screen session. If not,
+    # we'll set it to the filename .Xauthority in the user's home directory.
+    #
+    xauth_test_file="/dev/shm/.mcms_interactive_${SCREENSESSION}_xauth_check"
+    screen -S "$SCREENSESSION" -X screen -t "EnvCheck" 9 bash -i -c "echo \$XAUTHORITY > ${xauth_test_file}"
+
+    if [[ ! -s "${xauth_test_file}" ]]; then
+        # The environment variable XAUTHORITY is not set within the screen
+        screen -S "$SCREENSESSION" -X setenv XAUTHORITY ~/.Xauthority
+    fi
+
+    rm -f "${xauth_test_file}"
 fi
 
 
