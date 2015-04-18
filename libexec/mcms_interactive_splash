@@ -37,39 +37,81 @@
 
 
 tput setaf 2
-echo "Welcome to sinteractive!"
+echo "Welcome to your compute node! (${HOSTNAME})"
 tput sgr0
 
-cat <<"EOF"
+cat <<EOF
 
-This is really just a fancy-dancy screen session.
+This interactive session is really just a login with the GNU screen utility.
 
-You'll find at the bottom of your terminal that there are multiple "tabs" open.
-These tabs, or regions, all exist within a single encompassing screen "session."
-One of these tabs is a BASH prompt and another is HTOP, so you can monitor the
-utilization of the system to which you were scheduled in real time.
+You'll find multiple "tabs" open at the bottom of your terminal window. These
+tabs, or regions, all exist within a single encompassing screen "session." The
+first tab lets you monitor the real-time utilization of this system. The second
+is a standard Linux shell session (where you should do your work). Additional
+tabs may be easily created - see the keyboard shortcuts below.
 
-Please be sure to close out of sinteractive when you're done.
+Please close this session when you're done or the scheduler will kill it. You
+can see the amount of time remaining at the bottom-right of this window.
 
-Here are some useful screen commands.
 
-Key sequence    Result
--------------------------------------------------------------------------------
-ctrl+a ?        Display screen's command list
-ctrl+a c        Create a new tab (with shell)
-ctrl+a k        Close the current tab
-ctrl+a n/p      Proceed to the next (n) or previous (p) tab
-ctrl+a <num>    Jump to tab <num>
-ctrl+a Esc      Scroll back through text in the tab (press 'q' to stop)
-ctrl+a d        Detach from the session (in our case, kill sinteractive)
+Here are some useful screen commands:
+
+  Key combination   Result
+  ----------------------------------------------------------------------------
+  Ctrl+a ?          Display screen's help page
+
+  Ctrl+a c          Create a new tab (with bash shell)
+  Ctrl+a A          Assign a new name to the current tab
+  Ctrl+a k          Kill/Close the current tab
+
+  Ctrl+a "          Show a list of all tabs
+  Ctrl+a n          Switch to the next tab
+  Ctrl+a p          Switch to the previous tab
+  Ctrl+a <num>      Jump to tab <num>
+
+  Ctrl+a Esc        Scroll back through text in the tab (press 'q' to stop)
+  Ctrl+a d          Detach from the session (without killing any running jobs)
+
+  (For example, hold down CTRL and tap 'a'. Then release both and press 'n')
+
 
 EOF
-tput setaf 1
-echo "WARNING: if you detach from this screen session, your job will be killed."
-tput setaf 2
-echo
-echo "To continue, close this region"
-tput sgr0
 
-trap '{ :; }' INT
-while : ; do dd &>/dev/null ; done
+
+
+tput setaf 2
+echo "Below are some details on the hardware specifications of this node:"
+tput sgr0
+echo
+
+
+
+NUM_SOCKETS=$((`grep 'physical id' /proc/cpuinfo | sort -u | tail -n1 | cut -d" " -f3` + 1))
+NUM_CORES=$(grep siblings /proc/cpuinfo | head -n1 | cut -d" " -f2)
+
+echo "$NUM_SOCKETS CPU sockets with $NUM_CORES cores each ($(grep -m1 'model name' /proc/cpuinfo))"
+echo System memory: $(free -m | awk '/buffers[/]cache/ {print $3,"MB used, ",$4,"MB free"}')
+echo
+
+# Check for GPUs
+if [[ -n "$CUDA_VISIBLE_DEVICES" && "$CUDA_VISIBLE_DEVICES" != "NoDevFiles" ]]; then
+    echo NVIDIA CUDA device IDs in use: $CUDA_VISIBLE_DEVICES
+fi
+
+# Check for Xeon Phi Coprocessors
+if [[ -n "$OFFLOAD_DEVICES" ]]; then
+    echo Xeon Phi device IDs in use: $OFFLOAD_DEVICES
+fi
+
+
+
+# Give the user a way to easily close this tab
+echo
+echo "Press 'q' to close this help screen..."
+while : ; do
+    read -e -n 1 -s -p " " KEY_PRESS
+
+    if [[ "${KEY_PRESS}" == "q" ]]; then
+        break
+    fi
+done
