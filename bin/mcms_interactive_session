@@ -57,7 +57,7 @@ export SLURM_PATH="$( dirname "$( readlink -f "$(which squeue)" )" )"
 
 
 GLOBAL_CONFIG="$SCRIPT_DIR"/../mcms_interactive_session.conf
-USER_CONFIG="~/.mcms_interactive_session.conf"
+USER_CONFIG=~/.mcms_interactive_session.conf
 
 
 function help() {
@@ -86,9 +86,18 @@ function help() {
         -p: partition to run job in (default: $DEF_PARTITION)
         -J: job name (default: $DEF_JOB_NAME)
         -r: allocate resources from the named reservation
-        -s: share node with other users (default: yes)
+        -s: share node with other users (default: $DEF_SHARE_MODE)
         -t: job length (use SLURM time formats) (default: $DEF_JOB_LENGTH)
         -w: request a specific node (by name)
+
+
+    Configuration files:
+        The system administrator has configured a site-wide set of defaults. You
+        may over-ride these defaults via the command-line arguments above, or by
+        creating a configuration file in your home directory. To do so, execute:
+
+            cp ${GLOBAL_CONFIG} ${USER_CONFIG}
+            vi ${USER_CONFIG}
 
 
     This tool takes inspiration and code from several projects:
@@ -218,9 +227,9 @@ function read_config_files()
     fi
 
     # Read in any configuration settings specified in the user's own config file
-    if [[ -r "${USER_CONFIG}" ]]; then
+    if [[ -r ${USER_CONFIG} ]]; then
         echo
-        INFO "Reading your custom settings from "${USER_CONFIG}""
+        INFO "    Reading your custom settings from ${USER_CONFIG}"
         echo
         source "${USER_CONFIG}"
     fi
@@ -234,6 +243,7 @@ function read_config_files()
     DEF_NUM_CPUS=${DEF_NUM_CPUS:-1}
     DEF_MEM=${DEF_MEM:-4096}
     DEF_PARTITION=${DEF_PARTITION:-interactive}
+    DEF_SHARE_MODE=${DEF_SHARE_MODE:-yes}
     DEF_JOB_LENGTH=${DEF_JOB_LENGTH:-4:00:00}
     DEF_JOB_NAME=${DEF_JOB_NAME:-${USER}-interactive}
     STARTUP_TIMEOUT=${STARTUP_TIMEOUT:-300}
