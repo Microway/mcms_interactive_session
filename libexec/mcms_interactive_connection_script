@@ -82,7 +82,7 @@ if [[ -n "$DISPLAY" ]]; then
     # we'll set it to the filename .Xauthority in the user's home directory.
     #
     xauth_test_file="/dev/shm/.mcms_interactive_${SCREENSESSION}_xauth_check"
-    screen -S "$SCREENSESSION" -X screen -t "EnvCheck" 9 bash -i -c "echo \$XAUTHORITY > ${xauth_test_file}"
+    screen -S "$SCREENSESSION" -X screen -t "EnvCheck" 9 bash -c "echo \$XAUTHORITY > ${xauth_test_file}"
 
     if [[ ! -s "${xauth_test_file}" ]]; then
         # The environment variable XAUTHORITY is not set within the screen
