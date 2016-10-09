@@ -16,7 +16,7 @@
 #
 #
 # Modified scripts (with bugfixes and additional feature support):
-#   Copyright (C) 2015 Microway, Inc. All rights reserved.
+#   Copyright (C) 2015-2016 Microway, Inc. All rights reserved.
 #   http://www.microway.com
 #
 #
@@ -54,7 +54,7 @@ if [[ -z "$SLURM_JOB_ID" ]]; then
 fi
 
 
-SCREEN_RC="${SCRIPT_DIR}"/../mcms_interactive_screenrc.conf
+SCREEN_RC=/etc/microway/mcms_interactive_screenrc.conf
 
 if [[ ! -r "${SCREEN_RC}" ]]; then
     echo "Unable to locate the necessary screenrc file:"

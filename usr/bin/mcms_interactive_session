@@ -16,7 +16,7 @@
 #
 #
 # Modified scripts (with bugfixes and additional feature support):
-#   Copyright (C) 2015 Microway, Inc. All rights reserved.
+#   Copyright (C) 2015-2016 Microway, Inc. All rights reserved.
 #   http://www.microway.com
 #
 #
@@ -56,8 +56,8 @@ export SCRIPT_DIR="$( dirname "$( readlink -f "${BASH_SOURCE[0]}" )" )"
 export SLURM_PATH="$( dirname "$( readlink -f "$(which squeue)" )" )"
 
 
-GLOBAL_CONFIG="$SCRIPT_DIR"/../mcms_interactive_session.conf
-USER_CONFIG=~/.mcms_interactive_session.conf
+GLOBAL_CONFIG=/etc/microway/mcms_interactive_session.conf
+USER_CONFIG=~/.config/mcms_interactive_session.conf
 
 
 function help() {
@@ -224,7 +224,7 @@ function read_config_files()
     else
         echo
         WARN "Unable to read the global configuration file:"
-        WARN "    $SCRIPT_DIR/mcms_interactive_session.conf"
+        WARN "    ${GLOBAL_CONFIG}"
         echo
     fi
 
