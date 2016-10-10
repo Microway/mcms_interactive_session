@@ -11,18 +11,18 @@ ubiquitous screen utility) and resource monitoring (via htop/top).
 
 ###Usage
 
-Ensure the `mcms_interactive_session` script is in your PATH (usually this is
+Ensure the `interactive_session` script is in your PATH (usually this is
 already done for you by the system administrator). From your shell, run:
-`mcms_interactive_session`
+`interactive_session`
 
 To see a full list of options, run:
-`mcms_interactive_session -h`
+`interactive_session -h`
 
 The script will allocate the requested cluster resources, wait for them to
 become available and then log you into the compute node. You may specify which
 resources you require via command-line arguments (or via your own configuration
-file: `~/.config/mcms_interactive_session.conf`). Your administrator may have
-also set up a system-wide configuration file (but any options you specify will
+file: `~/.config/interactive_session.conf`). Your administrator may have also
+set up a system-wide configuration file (but any options you specify will
 over-ride the default settings in the system-wide configuration file).
 
 ###Installation Requirements

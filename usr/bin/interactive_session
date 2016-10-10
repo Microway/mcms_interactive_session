@@ -56,8 +56,8 @@ export SCRIPT_DIR="$( dirname "$( readlink -f "${BASH_SOURCE[0]}" )" )"
 export SLURM_PATH="$( dirname "$( readlink -f "$(which squeue)" )" )"
 
 
-GLOBAL_CONFIG=/etc/microway/mcms_interactive_session.conf
-USER_CONFIG=~/.config/mcms_interactive_session.conf
+GLOBAL_CONFIG=/etc/microway/interactive_session.conf
+USER_CONFIG=~/.config/interactive_session.conf
 
 
 function help() {
@@ -107,7 +107,7 @@ function help() {
                    (major changes by Josh McSavaney)
 
     Modified scripts (with bugfixes and additional feature support):
-      Copyright (C) 2015 Microway, Inc. All rights reserved.
+      Copyright (C) 2015-2016 Microway, Inc. All rights reserved.
       http://www.microway.com
 
 EOF
@@ -415,10 +415,10 @@ assemble_allocation_options
 
 
 # This script will be started on the remote node (by the batch scheduler)
-BATCH_SCRIPT="${SCRIPT_DIR}/../libexec/mcms_interactive_batch_script"
+BATCH_SCRIPT="${SCRIPT_DIR}/../libexec/microway/interactive_batch_script"
 
 # This script will be called by SSH (to connect the user to their session)
-CONNECTION_SCRIPT="${SCRIPT_DIR}/../libexec/mcms_interactive_connection_script"
+CONNECTION_SCRIPT="${SCRIPT_DIR}/../libexec/microway/interactive_connection_script"
 
 
 

@@ -54,7 +54,7 @@ if [[ -z "$SLURM_JOB_ID" ]]; then
 fi
 
 
-SCREEN_RC=/etc/microway/mcms_interactive_screenrc.conf
+SCREEN_RC=/etc/microway/interactive_screenrc.conf
 
 if [[ ! -r "${SCREEN_RC}" ]]; then
     echo "Unable to locate the necessary screenrc file:"

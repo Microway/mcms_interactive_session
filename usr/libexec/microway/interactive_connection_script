@@ -16,7 +16,7 @@
 #
 #
 # Modified scripts (with bugfixes and additional feature support):
-#   Copyright (C) 2015 Microway, Inc. All rights reserved.
+#   Copyright (C) 2015-2016 Microway, Inc. All rights reserved.
 #   http://www.microway.com
 #
 #
@@ -39,8 +39,11 @@
 ################################################################################
 #
 # This script connects a user to their existing screen session (which is started
-# by the mcms_interactive_session utility). That script will SSH into the node
-# that has been reserved by SLURM and run this script.
+# by the interactive_session utility). That interactive_session script will SSH
+# into the node that has been reserved by SLURM and run this script.
+#
+# In this script, we set up the X11 session (if there is one), start up a 'top'
+# monitoring tool and connect the user to the seesion.
 #
 ################################################################################
 
@@ -53,8 +56,6 @@ fi
 
 
 SCREENSESSION="$2"
-
-SCRIPT_DIR="$( dirname "$( readlink -f "${BASH_SOURCE[0]}" )" )"
 
 
 # There is a possible race condition here. If the job has just started, we
@@ -97,7 +98,7 @@ fi
 screen -S "$SCREENSESSION" -X screen -t "bash" 1 bash -i -l
 
 # Start up a splash screen with a welcome message
-screen -S "$SCREENSESSION" -X screen -t "Help" 2 ${SCRIPT_DIR}/../libexec/mcms_interactive_splash
+screen -S "$SCREENSESSION" -X screen -t "Help" 2 /usr/libexec/microway/interactive_splash
 
 # Remove the META tab, which has outlived its usefulness
 screen -p0 -S "$SCREENSESSION" -X kill
