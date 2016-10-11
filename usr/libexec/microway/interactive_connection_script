@@ -95,10 +95,8 @@ fi
 
 
 # Start up a shell session for the user
+screen -S "$SCREENSESSION" -X setenv SPLASH_RCFILE /usr/libexec/microway/interactive_splash_rcfile 
 screen -S "$SCREENSESSION" -X screen -t "bash" 1 bash -i -l
-
-# Start up a splash screen with a welcome message
-screen -S "$SCREENSESSION" -X screen -t "Help" 2 /usr/libexec/microway/interactive_splash
 
 # Remove the META tab, which has outlived its usefulness
 screen -p0 -S "$SCREENSESSION" -X kill
@@ -113,4 +111,4 @@ screen -S "$SCREENSESSION" -X screen -t "Top" 0 bash -i -c 'htop 2>/dev/null || 
 #
 # The user can finally get to work!!
 #
-exec screen -p2 -S "$SCREENSESSION" -dr
+exec screen -p1 -S "$SCREENSESSION" -dr

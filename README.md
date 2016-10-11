@@ -37,12 +37,25 @@ over-ride the default settings in the system-wide configuration file).
 
 ###Installation Instructions
 
-These scripts are placed into the system path and configuration directory.
+These scripts are placed into the system paths and configuration directories
+on both the Head/Front-End nodes and on the Compute Nodes. Only a couple files
+are needed on the Front-End nodes; most scripts are on the Compute Nodes.
 
-An RPM can be created by running the following from the current directory:
+Installation RPMs can be created by running the following:
 ```
 fpm -t rpm -s dir -a all                                                     \
-    --name mcms_interactive_session -v **version**                           \
+    --name mcms_interactive_session_head -v **version**                      \
+    --vendor Microway --license GPLv3                                        \
+    --url https://github.com/Microway/mcms_interactive_session               \
+    --description 'Easy-to-Use Login Sessions on HPC Clusters'               \
+    --config-files etc/                                                      \
+    etc/microway/interactive_session.conf                                    \
+    usr/bin/interactive_session                                              \
+    usr/libexec/microway/interactive_batch_script
+```
+```
+fpm -t rpm -s dir -a all                                                     \
+    --name mcms_interactive_session_nodes -v **version**                     \
     --vendor Microway --license GPLv3                                        \
     --url https://github.com/Microway/mcms_interactive_session               \
     --description 'Easy-to-Use Login Sessions on HPC Clusters'               \
