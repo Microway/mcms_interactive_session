@@ -9,6 +9,8 @@ the cluster's Batch Scheduler / Resource Manager (e.g. SLURM, TORQUE).
 The interactive sessions provide X11 Windows forwarding, multiple tabs (via the
 ubiquitous screen utility) and resource monitoring (via htop/top).
 
+![mcms interactive session login](https://cloud.githubusercontent.com/assets/4153509/25530770/79d1dba6-2bf5-11e7-8f88-493ccb04cb85.png)
+
 ###Usage
 
 Ensure the `interactive_session` script is in your PATH (usually this is
