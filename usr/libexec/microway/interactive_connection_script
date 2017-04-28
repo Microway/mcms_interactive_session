@@ -96,7 +96,11 @@ fi
 
 # Start up a shell session for the user
 screen -S "$SCREENSESSION" -X setenv SPLASH_RCFILE /usr/libexec/microway/interactive_splash_rcfile 
-screen -S "$SCREENSESSION" -X screen -t "bash" 1 bash -i -l
+if [[ "${SHELL}" == "/bin/csh" ]]; then
+    screen -S "$SCREENSESSION" -X screen -t "csh" 1 csh -l
+else
+    screen -S "$SCREENSESSION" -X screen -t "bash" 1 bash -i -l
+fi
 
 # Remove the META tab, which has outlived its usefulness
 screen -p0 -S "$SCREENSESSION" -X kill
