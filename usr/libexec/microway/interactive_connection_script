@@ -16,7 +16,7 @@
 #
 #
 # Modified scripts (with bugfixes and additional feature support):
-#   Copyright (C) 2015-2016 Microway, Inc. All rights reserved.
+#   Copyright (C) 2015-2018 Microway, Inc. All rights reserved.
 #   http://www.microway.com
 #
 #
@@ -70,6 +70,14 @@ for (( i=0; i<100; i++ )); do
 
     sleep 0.1
 done
+
+
+# In some environments, the HOME environment variable may not be set. Ensure
+# that something sensible is in place before the user's shells start up.
+if [[ -n "$HOME" ]]; then
+    export HOME="$(cd ~ && pwd)"
+fi
+screen -S "$SCREENSESSION" -X setenv HOME "$HOME"
 
 
 # If DISPLAY is set then send it to the screen session (for X11 forwarding)
